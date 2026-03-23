@@ -45,8 +45,9 @@ image = (
         "torchaudio==2.1.2+cu118",
         extra_index_url="https://download.pytorch.org/whl/cu118",
     )
+    # Install numpy<2 first (basicsr/gfpgan need it at build time)
+    .pip_install("numpy<2", "Cython")
     .pip_install(
-        "numpy<2",
         "dlib-bin",
         "face_alignment",
         "imageio",
@@ -58,14 +59,10 @@ image = (
         "tqdm",
         "yacs",
         "safetensors",
-        "gfpgan",
-        "basicsr",
-        "facexlib",
-        "realesrgan",
-        "boto3",
-        "requests",
-        "fastapi[standard]",
     )
+    # Install basicsr/gfpgan separately (C extensions need numpy<2 present)
+    .pip_install("basicsr>=1.4.2", "facexlib>=0.3.0", "gfpgan", "realesrgan")
+    .pip_install("boto3", "requests", "fastapi[standard]")
     # Clone SadTalker
     .run_commands("git clone --depth 1 https://github.com/OpenTalker/SadTalker.git /app/SadTalker")
     # Patch numpy 2.0 compat (belt-and-suspenders even with numpy<2 pin)
@@ -86,7 +83,7 @@ image = (
         # BFM fitting models
         f"cd /app/SadTalker/checkpoints && wget -q {SADTALKER_WEIGHTS['bfm']} && unzip -q BFM_Fitting.zip && rm BFM_Fitting.zip",
         # Face detection hub models
-        f"wget -q {SADTALKER_WEIGHTS['hub']} -O /tmp/hub.zip && unzip -q /tmp/hub.zip -d /root/.cache/torch/ && rm /tmp/hub.zip",
+        f"mkdir -p /root/.cache/torch && wget -q {SADTALKER_WEIGHTS['hub']} -O /tmp/hub.zip && unzip -q /tmp/hub.zip -d /root/.cache/torch/ && rm /tmp/hub.zip",
         # GFPGAN weights
         f"mkdir -p /app/SadTalker/gfpgan/weights && wget -q -P /app/SadTalker/gfpgan/weights {SADTALKER_WEIGHTS['gfpgan']}",
         # facexlib detection models

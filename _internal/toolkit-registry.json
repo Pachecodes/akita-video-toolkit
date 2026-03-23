@@ -492,6 +492,13 @@
           "operations": ["sadtalker"],
           "gpu": "A10G",
           "estimatedCost": "$0.05-0.30 per video"
+        },
+        "dewatermark": {
+          "appFile": "docker/modal-propainter/app.py",
+          "envVar": "MODAL_DEWATERMARK_ENDPOINT_URL",
+          "operations": ["dewatermark"],
+          "gpu": "A10G",
+          "estimatedCost": "$0.05-0.50 per video"
         }
       },
       "created": "2026-03-23",

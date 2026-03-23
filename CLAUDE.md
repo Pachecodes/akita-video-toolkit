@@ -150,17 +150,28 @@ python tools/qwen3_tts.py --list-tones    # neutral, warm, professional, excited
 
 Temperature controls expressiveness: `--temperature 1.2` (more expressive) or `--temperature 0.4` (more consistent).
 
-### AI Image Editing (Cloud GPU)
+### Cloud GPU Providers
 
-All Cloud GPU tools support `--cloud runpod` (default) or `--cloud modal`. RunPod requires a RunPod account — use `--setup` to create endpoints automatically. See registry `cloudProviders` for Docker images and env vars.
+All cloud GPU tools support two providers via `--cloud runpod|modal`. RunPod is the default. Modal was added as a reliability fallback after RunPod outages, and offers faster cold starts.
 
 ```bash
-# RunPod setup (one-time per tool)
+# --- RunPod setup (automated, one-time per tool) ---
 echo "RUNPOD_API_KEY=your_key_here" >> .env
 python tools/image_edit.py --setup
 python tools/upscale.py --setup
 python tools/qwen3_tts.py --setup
 python tools/music_gen.py --setup
+
+# --- Modal setup (deploy each app you need) ---
+pip install modal && python3 -m modal setup
+modal deploy docker/modal-upscale/app.py        # Then save URL to .env
+modal deploy docker/modal-image-edit/app.py
+# See docs/modal-setup.md for full guide
+```
+
+### AI Image Editing
+
+```bash
 
 # Image editing (Qwen-Image-Edit)
 python tools/image_edit.py --input photo.jpg --prompt "Add sunglasses"

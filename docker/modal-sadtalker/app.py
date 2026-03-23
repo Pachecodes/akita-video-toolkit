@@ -34,19 +34,23 @@ image = (
     modal.Image.from_registry(
         "nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04",
         add_python="3.10",
+        force_build=True,
     )
     .apt_install(
         "ffmpeg", "git", "wget", "unzip", "cmake", "build-essential",
         "libgl1-mesa-glx", "libglib2.0-0",
     )
-    .pip_install(
-        "torch==2.1.2+cu118",
-        "torchvision==0.16.2+cu118",
-        "torchaudio==2.1.2+cu118",
-        extra_index_url="https://download.pytorch.org/whl/cu118",
+    # torch 2.4+ handles both numpy 1.x and 2.x correctly.
+    # Earlier torch versions fail with "Numpy is not available" on Modal's runtime.
+    .pip_install("numpy<2")
+    .pip_install("torch==2.4.0", "torchvision==0.19.0", "torchaudio==2.4.0")
+    .pip_install("basicsr>=1.4.2", "facexlib>=0.3.0", "gfpgan", "realesrgan")
+    # Patch basicsr for torchvision 0.19+ (functional_tensor removed)
+    .run_commands(
+        r"find /usr/local/lib -name 'degradations.py' -path '*/basicsr/*' -exec "
+        r"sed -i 's/from torchvision.transforms.functional_tensor import rgb_to_grayscale/"
+        r"from torchvision.transforms.functional import rgb_to_grayscale/g' {} \;"
     )
-    # Install numpy<2 first (basicsr/gfpgan need it at build time)
-    .pip_install("numpy<2", "Cython")
     .pip_install(
         "dlib-bin",
         "face_alignment",
@@ -59,10 +63,10 @@ image = (
         "tqdm",
         "yacs",
         "safetensors",
+        "boto3",
+        "requests",
+        "fastapi[standard]",
     )
-    # Install basicsr/gfpgan separately (C extensions need numpy<2 present)
-    .pip_install("basicsr>=1.4.2", "facexlib>=0.3.0", "gfpgan", "realesrgan")
-    .pip_install("boto3", "requests", "fastapi[standard]")
     # Clone SadTalker
     .run_commands("git clone --depth 1 https://github.com/OpenTalker/SadTalker.git /app/SadTalker")
     # Patch numpy 2.0 compat (belt-and-suspenders even with numpy<2 pin)
@@ -104,12 +108,25 @@ image = (
 class SadTalkerGen:
     @modal.enter()
     def verify_setup(self):
+        import subprocess
         import torch
         from pathlib import Path
 
         print(f"PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}")
         if torch.cuda.is_available():
             print(f"GPU: {torch.cuda.get_device_name(0)}")
+
+        # Verify numpy-torch bridge works in this runtime
+        import numpy
+        t = torch.from_numpy(numpy.array([1.0]))
+        print(f"numpy {numpy.__version__}, torch.from_numpy: {t}")
+
+        # Also verify it works from subprocess (since SadTalker runs as subprocess)
+        result = subprocess.run(
+            ["python", "-c", "import torch, numpy; print(f'subprocess: numpy={numpy.__version__}, from_numpy={torch.from_numpy(numpy.array([1.0]))}')"],
+            capture_output=True, text=True,
+        )
+        print(f"Subprocess check: {result.stdout.strip() or result.stderr.strip()}")
 
         ckpt = Path("/app/SadTalker/checkpoints")
         print(f"Checkpoints: {[f.name for f in ckpt.iterdir()][:6]}")

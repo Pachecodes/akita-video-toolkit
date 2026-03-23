@@ -434,6 +434,9 @@ const opacity = interpolate(frame, [0, 20], [0, 1], { extrapolateRight: 'clamp' 
 ```
 
 ### Media
+
+**Always use `<OffthreadVideo>`, never `<video>`** — Remotion requires its own video component for frame-accurate rendering. Using a raw `<video>` tag will not render correctly.
+
 ```tsx
 <OffthreadVideo src={staticFile('demo.mp4')} />
 <Audio src={staticFile('voiceover.mp3')} volume={1} />

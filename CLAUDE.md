@@ -110,7 +110,7 @@ pip install -r tools/requirements.txt
 |------|-------|-------------|
 | **Project tools** | voiceover, music, music_gen, sfx, sync_timing | During video creation workflow |
 | **Utility tools** | redub, addmusic, notebooklm_brand, locate_watermark | Quick transformations on existing videos |
-| **Cloud GPU** | image_edit, upscale, dewatermark, sadtalker, qwen3_tts, music_gen | AI processing via RunPod |
+| **Cloud GPU** | image_edit, upscale, dewatermark, sadtalker, qwen3_tts, music_gen, flux2 | AI processing via RunPod or Modal (`--cloud runpod\|modal`) |
 
 Utility tools work on any video file without requiring a project structure.
 
@@ -152,7 +152,7 @@ Temperature controls expressiveness: `--temperature 1.2` (more expressive) or `-
 
 ### AI Image Editing (Cloud GPU)
 
-All Cloud GPU tools require a RunPod account. Use `--setup` to create endpoints automatically. See registry `cloudProviders.runpod.endpoints` for Docker images and env vars.
+All Cloud GPU tools support `--cloud runpod` (default) or `--cloud modal`. RunPod requires a RunPod account — use `--setup` to create endpoints automatically. See registry `cloudProviders` for Docker images and env vars.
 
 ```bash
 # RunPod setup (one-time per tool)
@@ -164,13 +164,14 @@ python tools/music_gen.py --setup
 
 # Image editing (Qwen-Image-Edit)
 python tools/image_edit.py --input photo.jpg --prompt "Add sunglasses"
+python tools/image_edit.py --input photo.jpg --prompt "Add sunglasses" --cloud modal
 python tools/image_edit.py --input photo.jpg --style cyberpunk
 python tools/image_edit.py --input photo.jpg --background office
 python tools/image_edit.py --list-presets  # Full preset list
 
 # Upscaling (RealESRGAN)
-python tools/upscale.py --input photo.jpg --output photo_4x.png --runpod
-python tools/upscale.py --input photo.jpg --scale 2 --model anime --face-enhance --runpod
+python tools/upscale.py --input photo.jpg --output photo_4x.png --cloud runpod
+python tools/upscale.py --input photo.jpg --scale 2 --model anime --face-enhance --cloud runpod
 ```
 
 See `docs/qwen-edit-patterns.md` and `.claude/skills/qwen-edit/` for prompting guidance.

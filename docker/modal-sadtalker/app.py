@@ -101,7 +101,7 @@ image = (
 @app.cls(
     image=image,
     gpu="A10G",
-    timeout=900,
+    timeout=1800,
     scaledown_window=60,
 )
 @modal.concurrent(max_inputs=1)
@@ -256,7 +256,7 @@ class SadTalkerGen:
 
                 proc = subprocess.run(
                     cmd, cwd="/app/SadTalker",
-                    capture_output=True, text=True, timeout=600,
+                    capture_output=True, text=True, timeout=1800,
                 )
 
                 if proc.returncode != 0:

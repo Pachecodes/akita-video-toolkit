@@ -33,6 +33,7 @@ def get_r2_client():
             endpoint_url=r2_config["endpoint_url"],
             aws_access_key_id=r2_config["access_key_id"],
             aws_secret_access_key=r2_config["secret_access_key"],
+            region_name="auto",
             config=Config(signature_version="s3v4"),
         )
         return client, r2_config

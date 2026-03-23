@@ -111,6 +111,12 @@ Audio, video, and image tools in `tools/`. See registry `tools` section for the 
 pip install -r tools/requirements.txt
 ```
 
+**Important: always invoke tools from the toolkit root directory.** When working inside a project (`projects/my-video/`), tool paths like `python3 tools/upscale.py` will fail because `tools/` is relative. Always use:
+```bash
+cd /path/to/claude-code-video-toolkit && python3 tools/upscale.py ...
+```
+This is especially critical for background commands where the working directory may not be obvious.
+
 ### Tool Categories
 
 | Type | Tools | When to Use |

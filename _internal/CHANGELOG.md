@@ -6,6 +6,16 @@ All notable changes to claude-code-video-toolkit.
 
 ---
 
+## 2026-03-26 (v0.13.2)
+
+### Changed
+- **Default cloud provider switched to Modal** — All 6 cloud GPU tools (flux2, image_edit, music_gen, qwen3_tts, sadtalker, voiceover) now default to `--cloud modal` instead of `--cloud runpod`. RunPod remains available via `--cloud runpod`.
+
+### Fixed
+- Remove unused imports in `tools/ltx2.py` (`json`, `requests`) — flagged by code quality bot
+
+---
+
 ## 2026-03-25 (v0.13.1)
 
 ### Added

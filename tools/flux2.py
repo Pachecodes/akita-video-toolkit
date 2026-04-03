@@ -318,6 +318,7 @@ def generate_image(
     open_result: bool = True,
     verbose: bool = False,
     cloud: str = "runpod",
+    progress=None,
 ) -> Optional[str]:
     """
     Generate image from text prompt.
@@ -366,6 +367,7 @@ def generate_image(
         timeout=600,
         progress_label="Generating image",
         verbose=True,
+        progress=progress,
     )
 
     if "error" in result:
@@ -403,6 +405,7 @@ def edit_image(
     open_result: bool = True,
     verbose: bool = False,
     cloud: str = "runpod",
+    progress=None,
 ) -> Optional[str]:
     """
     Edit image(s) with the given prompt.
@@ -462,6 +465,7 @@ def edit_image(
         timeout=600,
         progress_label="Editing image",
         verbose=True,
+        progress=progress,
     )
 
     if "error" in result:
@@ -851,6 +855,9 @@ Examples:
 
     # Output format
     parser.add_argument("--json", action="store_true", help="Output result as JSON")
+    parser.add_argument("--progress", choices=["human", "json"], default="human",
+                        help="Progress output mode: human (colored stderr, default) "
+                             "or json (JSON Lines to stderr for bots/agents)")
 
     args = parser.parse_args()
 
@@ -886,6 +893,9 @@ Examples:
         print("\n\033[91m!! --prompt or --preset is required\033[0m")
         sys.exit(1)
 
+    from cloud_gpu import ProgressReporter
+    reporter = ProgressReporter(mode=args.progress)
+
     print()
     log("FLUX.2 Klein 4B", "info")
     log("=" * 40, "dim")
@@ -902,6 +912,7 @@ Examples:
             open_result=not args.no_open,
             verbose=args.verbose,
             cloud=args.cloud,
+            progress=reporter,
         )
     else:
         # Generate mode
@@ -916,6 +927,7 @@ Examples:
             open_result=not args.no_open,
             verbose=args.verbose,
             cloud=args.cloud,
+            progress=reporter,
         )
 
 

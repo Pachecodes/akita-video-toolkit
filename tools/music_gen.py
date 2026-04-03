@@ -313,6 +313,7 @@ def call_acemusic_api(
     guidance_scale: Optional[float] = None,
     infer_method: Optional[str] = None,
     json_output: bool = False,
+    progress=None,
 ) -> Optional[dict]:
     """Generate music via ACE-Step official cloud API (acemusic.ai).
 
@@ -424,27 +425,42 @@ def call_acemusic_api(
     }
 
     import time
+    from contextlib import contextmanager as _cm
     start_time = time.time()
 
+    def _emit(stage, msg, level="dim", pct=None):
+        if progress:
+            progress.event(stage, msg, pct=pct, level=level)
+        else:
+            log(msg, level)
+
     try:
-        log("Sending request to acemusic.ai...", "dim")
-        response = requests.post(
-            ACEMUSIC_API_URL,
-            json=payload,
-            headers=headers,
-            timeout=600,
-        )
+        model_tag = "XL Turbo 4B" if "turbo" in payload.get("model", "") else "ACE-Step"
+        _emit("submit", f"Sending to acemusic.ai ({model_tag}, thinking: {'on' if thinking else 'off'})...")
+
+        # Heartbeat emits liveness events during the blocking call
+        heartbeat_ctx = (progress.heartbeat(
+            "waiting", "Waiting for acemusic.ai response... ({elapsed:.0f}s)"
+        ) if progress else _cm(lambda: (yield))())
+
+        with heartbeat_ctx:
+            response = requests.post(
+                ACEMUSIC_API_URL,
+                json=payload,
+                headers=headers,
+                timeout=600,
+            )
     except requests.exceptions.Timeout:
-        log("Request timed out (600s)", "error")
+        _emit("error", "Request timed out (600s)", level="error")
         return None
     except requests.exceptions.RequestException as e:
-        log(f"Request failed: {e}", "error")
+        _emit("error", f"Request failed: {e}", level="error")
         return None
 
     elapsed = time.time() - start_time
 
     if response.status_code != 200:
-        log(f"API returned HTTP {response.status_code}: {response.text[:500]}", "error")
+        _emit("error", f"API returned HTTP {response.status_code}: {response.text[:500]}", level="error")
         return None
 
     try:
@@ -500,7 +516,7 @@ def call_acemusic_api(
         saved_files.append(out_file)
 
     if not saved_files:
-        log("No audio files could be saved", "error")
+        _emit("error", "No audio files could be saved", level="error")
         return None
 
     # Report results
@@ -508,9 +524,10 @@ def call_acemusic_api(
         file_size_kb = os.path.getsize(f) / 1024
         actual_dur = get_audio_duration(f)
         dur_str = f", {actual_dur:.1f}s" if actual_dur else ""
-        log(f"Saved: {f} ({file_size_kb:.0f} KB{dur_str})", "success")
+        _emit("complete", f"Saved: {f} ({file_size_kb:.0f} KB{dur_str})",
+              pct=100, level="success")
 
-    log(f"Time: {elapsed:.1f}s total", "dim")
+    _emit("cost", f"Time: {elapsed:.1f}s total (acemusic)", level="dim")
 
     # Parse metadata from response content
     metas = {}
@@ -575,6 +592,7 @@ def generate_music(
     seed: Optional[int] = None,
     json_output: bool = False,
     cloud: str = "runpod",
+    progress=None,
 ) -> Optional[dict]:
     """Generate music from text prompt via cloud GPU."""
     log("ACE-Step 1.5 — Music Generation", "info")
@@ -621,6 +639,7 @@ def generate_music(
         tool_name="music_gen",
         timeout=600,
         progress_label="Generating music",
+        progress=progress,
     )
 
     if "error" in result:
@@ -682,6 +701,7 @@ def generate_cover(
     audio_format: str = "mp3",
     json_output: bool = False,
     cloud: str = "runpod",
+    progress=None,
 ) -> Optional[dict]:
     """Generate a cover/style transfer from reference audio."""
     if not Path(reference_path).exists():
@@ -718,6 +738,7 @@ def generate_cover(
         tool_name="music_gen",
         timeout=600,
         progress_label="Creating cover",
+        progress=progress,
     )
 
     if "error" in result:
@@ -758,6 +779,7 @@ def extract_stem(
     audio_format: str = "mp3",
     json_output: bool = False,
     cloud: str = "runpod",
+    progress=None,
 ) -> Optional[dict]:
     """Extract a stem (vocals, drums, bass, etc.) from mixed audio."""
     if not Path(input_path).exists():
@@ -791,6 +813,7 @@ def extract_stem(
         tool_name="music_gen",
         timeout=600,
         progress_label="Extracting stem",
+        progress=progress,
     )
 
     if "error" in result:
@@ -1216,6 +1239,9 @@ Examples:
     # Output format
     parser.add_argument("--json", action="store_true", help="Output result as JSON")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done")
+    parser.add_argument("--progress", choices=["human", "json"], default="human",
+                        help="Progress output mode: human (colored stderr, default) "
+                             "or json (JSON Lines to stderr for bots/agents)")
 
     args = parser.parse_args()
 
@@ -1240,6 +1266,10 @@ Examples:
         thinking = True
     else:
         thinking = args.cloud == "acemusic"
+
+    # Create progress reporter
+    from cloud_gpu import ProgressReporter
+    reporter = ProgressReporter(mode=args.progress)
 
     # Validate acemusic-only features
     if args.cloud != "acemusic":
@@ -1294,6 +1324,7 @@ Examples:
             guidance_scale=args.guidance_scale,
             infer_method=args.infer_method,
             json_output=args.json,
+            progress=reporter,
         )
         if args.json and result:
             print(json.dumps(result, indent=2))
@@ -1337,6 +1368,7 @@ Examples:
             guidance_scale=args.guidance_scale,
             infer_method=args.infer_method,
             json_output=args.json,
+            progress=reporter,
         )
         if args.json and result:
             print(json.dumps(result, indent=2))
@@ -1369,6 +1401,7 @@ Examples:
             audio_format=args.audio_format,
             json_output=args.json,
             cloud=args.cloud,
+            progress=reporter,
         )
         if args.json and result:
             print(json.dumps(result, indent=2))
@@ -1411,6 +1444,7 @@ Examples:
                 guidance_scale=args.guidance_scale,
                 infer_method=args.infer_method,
                 json_output=args.json,
+                progress=reporter,
             )
         else:
             result = generate_cover(
@@ -1423,6 +1457,7 @@ Examples:
                 audio_format=args.audio_format,
                 json_output=args.json,
                 cloud=args.cloud,
+                progress=reporter,
             )
         if args.json and result:
             print(json.dumps(result, indent=2))
@@ -1505,6 +1540,7 @@ Examples:
             guidance_scale=args.guidance_scale,
             infer_method=args.infer_method,
             json_output=args.json,
+            progress=reporter,
         )
     else:
         result = generate_music(
@@ -1521,6 +1557,7 @@ Examples:
             seed=args.seed,
             json_output=args.json,
             cloud=args.cloud,
+            progress=reporter,
         )
 
     if args.json and result:

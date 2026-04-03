@@ -58,6 +58,7 @@ def process_with_cloud(
     timeout: int = 300,
     verbose: bool = True,
     cloud: str = "runpod",
+    progress=None,
 ) -> dict:
     """Process image using cloud GPU endpoint."""
     r2_keys_to_cleanup = []
@@ -101,6 +102,7 @@ def process_with_cloud(
         timeout=timeout,
         progress_label="Upscaling image",
         verbose=verbose,
+        progress=progress,
     )
 
     if isinstance(result, dict) and result.get("error"):
@@ -553,6 +555,13 @@ Examples:
         action="store_true",
         help="Show what would be done without processing",
     )
+    parser.add_argument(
+        "--progress",
+        choices=["human", "json"],
+        default="human",
+        help="Progress output mode: human (colored stderr, default) "
+             "or json (JSON Lines to stderr for bots/agents)",
+    )
 
     return parser.parse_args()
 
@@ -560,6 +569,9 @@ Examples:
 def main():
     args = parse_args()
     verbose = not args.json
+
+    from cloud_gpu import ProgressReporter
+    reporter = ProgressReporter(mode=args.progress)
 
     # Handle deprecated --runpod flag
     if args.runpod:
@@ -621,6 +633,7 @@ def main():
             timeout=args.timeout,
             verbose=verbose,
             cloud=args.cloud,
+            progress=reporter,
         )
 
         if result.get("error"):

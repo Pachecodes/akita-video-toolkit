@@ -150,6 +150,7 @@ def generate_audio(
     temperature: float | None = None,
     top_p: float | None = None,
     cloud: str = "modal",
+    progress=None,
 ) -> dict:
     """Generate audio using Qwen3-TTS via cloud GPU.
 
@@ -230,6 +231,7 @@ def generate_audio(
         poll_interval=3,
         progress_label="Generating speech",
         verbose=verbose,
+        progress=progress,
     )
 
     if isinstance(output, dict) and output.get("error"):
@@ -891,6 +893,13 @@ Examples:
         action="store_true",
         help="Output result as JSON",
     )
+    parser.add_argument(
+        "--progress",
+        choices=["human", "json"],
+        default="human",
+        help="Progress output mode: human (colored stderr, default) "
+             "or json (JSON Lines to stderr for bots/agents)",
+    )
 
     return parser.parse_args()
 
@@ -898,6 +907,9 @@ Examples:
 def main():
     args = parse_args()
     verbose = not args.json
+
+    from cloud_gpu import ProgressReporter
+    reporter = ProgressReporter(mode=args.progress)
 
     # Handle --list-voices
     if args.list_voices:
@@ -994,6 +1006,7 @@ def main():
         temperature=args.temperature,
         top_p=args.top_p,
         cloud=args.cloud,
+        progress=reporter,
     )
 
     if not result.get("success"):

@@ -590,6 +590,13 @@ Examples:
         help="Show what would be done without processing",
     )
     parser.add_argument(
+        "--progress",
+        choices=["human", "json"],
+        default="human",
+        help="Progress output mode: human (colored stderr, default) "
+             "or json (JSON Lines to stderr for bots/agents)",
+    )
+    parser.add_argument(
         "--keep-temp",
         action="store_true",
         help="Keep intermediate files (frames, masks)",
@@ -1131,6 +1138,7 @@ def process_with_cloud(
     original_width: int | None = None,
     original_height: int | None = None,
     cloud: str = "runpod",
+    progress=None,
 ) -> dict:
     """Process video using cloud GPU endpoint (RunPod or Modal)."""
     r2_keys_to_cleanup = []
@@ -1187,6 +1195,7 @@ def process_with_cloud(
         timeout=timeout,
         progress_label="Removing watermark",
         verbose=verbose,
+        progress=progress,
     )
 
     if isinstance(result, dict) and result.get("error"):
@@ -1606,6 +1615,9 @@ def main():
     propainter_path = get_propainter_path(args.propainter_path)
     verbose = not args.json
 
+    from cloud_gpu import ProgressReporter
+    reporter = ProgressReporter(mode=args.progress)
+
     # Handle --status
     if args.status:
         status = check_propainter_installed(propainter_path)
@@ -1742,6 +1754,7 @@ def main():
             original_width=video_width,
             original_height=video_height,
             cloud=args.cloud,
+            progress=reporter,
         )
 
         if result.get("error"):

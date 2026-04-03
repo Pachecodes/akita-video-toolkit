@@ -165,6 +165,7 @@ def process_with_cloud(
     timeout: int = 600,
     verbose: bool = True,
     cloud: str = "runpod",
+    progress=None,
 ) -> dict:
     """Process image+audio using cloud GPU endpoint."""
     r2_keys_to_cleanup = []
@@ -242,6 +243,7 @@ def process_with_cloud(
         timeout=timeout,
         progress_label="Generating talking head",
         verbose=verbose,
+        progress=progress,
     )
 
     if isinstance(result, dict) and result.get("error"):
@@ -726,6 +728,13 @@ Examples:
         action="store_true",
         help="Output result as JSON",
     )
+    parser.add_argument(
+        "--progress",
+        choices=["human", "json"],
+        default="human",
+        help="Progress output mode: human (colored stderr, default) "
+             "or json (JSON Lines to stderr for bots/agents)",
+    )
 
     return parser.parse_args()
 
@@ -733,6 +742,9 @@ Examples:
 def main():
     args = parse_args()
     verbose = not args.json
+
+    from cloud_gpu import ProgressReporter
+    reporter = ProgressReporter(mode=args.progress)
 
     # Handle --setup
     if args.setup:
@@ -821,6 +833,7 @@ def main():
         timeout=args.timeout,
         verbose=verbose,
         cloud=args.cloud,
+        progress=reporter,
     )
 
     if result.get("error"):

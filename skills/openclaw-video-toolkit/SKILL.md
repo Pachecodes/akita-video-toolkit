@@ -25,6 +25,22 @@ cd $TOOLKIT
 
 **NEVER run tool commands from inside a project directory.** Tools resolve paths relative to the toolkit root.
 
+## CRITICAL: Progress Reporting
+
+**ALWAYS add `--progress json` to every cloud GPU tool command.** This gives you structured JSON Lines on stderr so you can monitor job status, detect stuck jobs, and report progress to the user in real-time.
+
+```bash
+# CORRECT — always include --progress json
+python3 tools/music_gen.py --preset corporate-bg --duration 60 --output bg.mp3 --progress json
+
+# WRONG — no visibility into job status
+python3 tools/music_gen.py --preset corporate-bg --duration 60 --output bg.mp3
+```
+
+Tools that support `--progress json`: `music_gen.py`, `qwen3_tts.py`, `flux2.py`, `upscale.py`, `sadtalker.py`, `image_edit.py`, `dewatermark.py`, `ltx2.py`.
+
+See the **Progress Reporting** section below for output format and stage definitions.
+
 ## Setup
 
 ### Step 1: Check Current State
@@ -194,20 +210,22 @@ cd ~/.openclaw/workspace/claude-code-video-toolkit
 python3 tools/music_gen.py \
   --preset corporate-bg \
   --duration 90 \
-  --output projects/PROJECT_NAME/public/audio/bg-music.mp3
+  --output projects/PROJECT_NAME/public/audio/bg-music.mp3 \
+  --progress json
 
 # Or with custom prompt and thinking mode
 python3 tools/music_gen.py \
   --prompt "Subtle ambient tech, soft synth pads" \
   --duration 90 \
-  --output projects/PROJECT_NAME/public/audio/bg-music.mp3
+  --output projects/PROJECT_NAME/public/audio/bg-music.mp3 \
+  --progress json
 
 # Fall back to self-hosted Modal if no acemusic key
 python3 tools/music_gen.py \
   --preset corporate-bg \
   --duration 90 \
   --output projects/PROJECT_NAME/public/audio/bg-music.mp3 \
-  --cloud modal
+  --cloud modal --progress json
 ```
 
 Presets: `corporate-bg`, `upbeat-tech`, `ambient`, `dramatic`, `tension`, `hopeful`, `cta`, `lofi`.
@@ -226,14 +244,14 @@ python3 tools/qwen3_tts.py \
   --text "The voiceover text for scene one." \
   --speaker Ryan --tone warm \
   --output projects/PROJECT_NAME/public/audio/scenes/01.mp3 \
-  --cloud modal
+  --cloud modal --progress json
 
 # Scene 02
 python3 tools/qwen3_tts.py \
   --text "The voiceover text for scene two." \
   --speaker Ryan --tone warm \
   --output projects/PROJECT_NAME/public/audio/scenes/02.mp3 \
-  --cloud modal
+  --cloud modal --progress json
 
 # ... repeat for each scene
 ```
@@ -249,7 +267,7 @@ python3 tools/qwen3_tts.py \
   --ref-audio assets/voices/reference.m4a \
   --ref-text "Exact transcript of the reference audio" \
   --output projects/PROJECT_NAME/public/audio/scenes/01.mp3 \
-  --cloud modal
+  --cloud modal --progress json
 ```
 
 #### 4c. Scene Images
@@ -260,7 +278,7 @@ python3 tools/flux2.py \
   --prompt "Dark tech background with blue geometric grid, cinematic lighting" \
   --width 1920 --height 1080 \
   --output projects/PROJECT_NAME/public/images/title-bg.png \
-  --cloud modal
+  --cloud modal --progress json
 ```
 
 Image presets (use `--preset` instead of `--prompt --width --height`):
@@ -271,7 +289,7 @@ cd ~/.openclaw/workspace/claude-code-video-toolkit
 python3 tools/flux2.py \
   --preset title-bg \
   --output projects/PROJECT_NAME/public/images/title-bg.png \
-  --cloud modal
+  --cloud modal --progress json
 ```
 
 #### 4d. Video Clips — B-Roll & Animated Backgrounds (optional)
@@ -285,20 +303,20 @@ cd ~/.openclaw/workspace/claude-code-video-toolkit
 python3 tools/ltx2.py \
   --prompt "Aerial drone shot over a European city at golden hour, cinematic wide angle" \
   --output projects/PROJECT_NAME/public/videos/broll-europe.mp4 \
-  --cloud modal
+  --cloud modal --progress json
 
 # Animate a slide/screenshot (image-to-video)
 python3 tools/ltx2.py \
   --prompt "Gentle particle effects, soft ambient light shifts, very slight camera drift" \
   --input projects/PROJECT_NAME/public/images/title-bg.png \
   --output projects/PROJECT_NAME/public/videos/animated-title.mp4 \
-  --cloud modal
+  --cloud modal --progress json
 
 # Abstract intro/outro background
 python3 tools/ltx2.py \
   --prompt "Dark moody abstract background with flowing blue light streaks, bokeh particles, cinematic" \
   --output projects/PROJECT_NAME/public/videos/intro-bg.mp4 \
-  --cloud modal
+  --cloud modal --progress json
 ```
 
 Use in Remotion compositions with `<OffthreadVideo>`:
@@ -326,7 +344,7 @@ python3 tools/flux2.py \
   --prompt "Professional presenter portrait, clean style, dark background, facing camera, upper body" \
   --width 1024 --height 576 \
   --output projects/PROJECT_NAME/public/images/presenter.png \
-  --cloud modal
+  --cloud modal --progress json
 
 # 2. Generate per-scene narrator clips (one per scene, NOT one long video)
 python3 tools/sadtalker.py \
@@ -334,7 +352,7 @@ python3 tools/sadtalker.py \
   --audio projects/PROJECT_NAME/public/audio/scenes/01.mp3 \
   --preprocess full --still --expression-scale 0.8 \
   --output projects/PROJECT_NAME/public/narrator-01.mp4 \
-  --cloud modal
+  --cloud modal --progress json
 
 # Repeat for each scene that needs a narrator
 ```
@@ -356,7 +374,7 @@ python3 tools/image_edit.py \
   --input projects/PROJECT_NAME/public/images/title-bg.png \
   --prompt "Make it darker with red tones, more ominous" \
   --output projects/PROJECT_NAME/public/images/problem-bg.png \
-  --cloud modal
+  --cloud modal --progress json
 ```
 
 #### 4f. Upscaling (optional)
@@ -366,7 +384,7 @@ cd ~/.openclaw/workspace/claude-code-video-toolkit
 python3 tools/upscale.py \
   --input projects/PROJECT_NAME/public/images/some-image.png \
   --output projects/PROJECT_NAME/public/images/some-image-4x.png \
-  --scale 4 --cloud modal
+  --scale 4 --cloud modal --progress json
 ```
 
 ### Step 5: Sync Timing
@@ -441,6 +459,56 @@ import { lightLeak } from '../../../lib/transitions/presentations/light-leak';
 ```
 
 **NEVER import from `lib/transitions` barrel** — import custom transitions from `lib/transitions/presentations/` directly.
+
+---
+
+## Progress Reporting
+
+All cloud GPU tools support structured progress output for automated monitoring.
+
+### Usage
+
+Add `--progress json` to any tool command to get JSON Lines on stderr:
+
+```bash
+cd ~/.openclaw/workspace/claude-code-video-toolkit
+python3 tools/music_gen.py \
+  --preset corporate-bg --duration 60 \
+  --output projects/PROJECT_NAME/public/audio/bg-music.mp3 \
+  --progress json
+```
+
+### Output Format
+
+Each line on stderr is a JSON object:
+
+```json
+{"ts":"14:23:15","stage":"submit","msg":"Sending to acemusic.ai (XL Turbo 4B, thinking: on)...","pct":null,"elapsed":0.0}
+{"ts":"14:23:30","stage":"waiting","msg":"Waiting for acemusic.ai response... (15s)","pct":null,"elapsed":15.0}
+{"ts":"14:23:45","stage":"waiting","msg":"Waiting for acemusic.ai response... (30s)","pct":null,"elapsed":30.0}
+{"ts":"14:24:02","stage":"complete","msg":"Saved: bg-music.mp3 (245 KB, 60.1s)","pct":100,"elapsed":47.3}
+```
+
+### Stages
+
+| Stage | Meaning |
+|-------|---------|
+| `submit` | Job sent to provider |
+| `queue` | RunPod: waiting for GPU |
+| `processing` | RunPod: GPU processing |
+| `waiting` | Heartbeat during synchronous calls (acemusic, Modal) |
+| `complete` | Job finished successfully |
+| `error` | Something failed — check `msg` for details |
+| `item` | Multi-item progress (e.g., scene 3/7) — `pct` is populated |
+| `cost` | Estimated cost for the operation |
+
+### Behaviour by Provider
+
+- **acemusic**: Emits `submit` → periodic `waiting` heartbeats (every 15s) → `complete`
+- **RunPod**: Emits `submit` → `queue` → `processing` → `complete` (on each poll)
+- **Modal**: Emits `submit` → periodic `waiting` heartbeats → `complete`
+
+Default mode (`--progress human`) shows the same events as colored terminal output — no change to existing behaviour.
 
 ---
 

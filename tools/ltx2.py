@@ -98,6 +98,7 @@ def generate_video(
     quality: str = "standard",
     open_result: bool = True,
     cloud: str = "modal",
+    progress=None,
 ) -> Optional[str]:
     """
     Generate video from text prompt (and optional input image).
@@ -159,6 +160,7 @@ def generate_video(
         timeout=900,
         progress_label="Generating video",
         verbose=True,
+        progress=progress,
     )
 
     if "error" in result:
@@ -236,6 +238,9 @@ Examples:
     output_group.add_argument("--output", "-o", help="Output file path (default: auto-named .mp4)")
     output_group.add_argument("--no-open", action="store_true", help="Don't open result automatically")
     output_group.add_argument("--json", action="store_true", help="Output result as JSON")
+    output_group.add_argument("--progress", choices=["human", "json"], default="human",
+                              help="Progress output mode: human (colored stderr, default) "
+                                   "or json (JSON Lines to stderr for bots/agents)")
 
     # Cloud GPU
     cloud_group = parser.add_argument_group("Cloud GPU")
@@ -243,6 +248,9 @@ Examples:
                              help="Cloud GPU provider (default: modal)")
 
     args = parser.parse_args()
+
+    from cloud_gpu import ProgressReporter
+    reporter = ProgressReporter(mode=args.progress)
 
     print()
     log("LTX-2.3 Video Generation (22B DiT)", "info")
@@ -262,6 +270,7 @@ Examples:
         quality=args.quality,
         open_result=not args.no_open,
         cloud=args.cloud,
+        progress=reporter,
     )
 
     if result_path is None:

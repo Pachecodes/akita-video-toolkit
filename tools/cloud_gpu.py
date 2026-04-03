@@ -9,9 +9,12 @@ Supported providers:
 - modal: Modal web endpoints (new)
 """
 
+import json as _json
 import os
 import sys
+import threading
 import time
+from contextlib import contextmanager
 
 import requests
 from dotenv import load_dotenv
@@ -61,6 +64,89 @@ def _log(msg: str, level: str = "info"):
     prefix = {"info": "->", "success": "OK", "error": "!!", "warn": "??", "dim": "  "}
     color = colors.get(level, "")
     print(f"{color}{prefix.get(level, '->')} {msg}{reset}", file=sys.stderr)
+
+
+# ---------------------------------------------------------------------------
+# Progress reporter
+# ---------------------------------------------------------------------------
+
+
+class ProgressReporter:
+    """Structured progress reporting for long-running operations.
+
+    Two modes:
+    - "human" (default): colored stderr logs, same as _log() today
+    - "json": JSON Lines to stderr, machine-parseable for bots/agents
+
+    Both modes emit the same events at the same moments. The heartbeat()
+    context manager emits periodic liveness signals during blocking calls
+    (acemusic, Modal) so consumers know the process isn't stuck.
+    """
+
+    def __init__(self, mode: str = "human", heartbeat_interval: int = 15):
+        self.mode = mode  # "human" or "json"
+        self.heartbeat_interval = heartbeat_interval
+        self._start = time.time()
+        self._lock = threading.Lock()
+
+    @property
+    def elapsed(self) -> float:
+        return time.time() - self._start
+
+    def event(self, stage: str, msg: str, pct: int | None = None,
+              level: str = "dim"):
+        """Emit a progress event.
+
+        Args:
+            stage: Machine-readable stage key (submit, queue, processing,
+                   upload, download, complete, error, heartbeat, item).
+            msg: Human-readable message.
+            pct: Optional percentage (0-100).
+            level: Log level for human mode (info, success, error, warn, dim).
+        """
+        with self._lock:
+            if self.mode == "json":
+                record = {
+                    "ts": time.strftime("%H:%M:%S"),
+                    "stage": stage,
+                    "msg": msg,
+                    "pct": pct,
+                    "elapsed": round(self.elapsed, 1),
+                }
+                print(_json.dumps(record), file=sys.stderr, flush=True)
+            else:
+                _log(msg, level)
+
+    @contextmanager
+    def heartbeat(self, stage: str = "waiting",
+                  msg_template: str = "Waiting for response... ({elapsed:.0f}s)"):
+        """Context manager that emits periodic liveness events.
+
+        Use around blocking synchronous calls (acemusic, Modal) so bots
+        know the process is alive. In human mode, prints elapsed time
+        updates. In JSON mode, emits structured heartbeat events.
+        """
+        stop = threading.Event()
+
+        def _beat():
+            while not stop.wait(self.heartbeat_interval):
+                elapsed = self.elapsed
+                self.event(stage, msg_template.format(elapsed=elapsed),
+                           level="dim")
+
+        t = threading.Thread(target=_beat, daemon=True)
+        t.start()
+        try:
+            yield
+        finally:
+            stop.set()
+            t.join(timeout=1)
+
+    def item(self, current: int, total: int, label: str):
+        """Emit a multi-item progress event (e.g., scene 3/7)."""
+        pct = round((current / total) * 100) if total > 0 else None
+        self.event("item", f"{label} ({current}/{total})", pct=pct,
+                   level="info")
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +248,7 @@ def call_cloud_endpoint(
     queue_timeout: int = 300,
     progress_label: str = "Processing",
     verbose: bool = True,
+    progress: ProgressReporter | None = None,
 ) -> tuple[dict, float]:
     """Submit a job to a cloud GPU endpoint and wait for the result.
 
@@ -174,12 +261,18 @@ def call_cloud_endpoint(
         queue_timeout: Cancel if stuck in queue longer than this (RunPod only)
         progress_label: Label for progress messages (e.g., "Generating speech")
         verbose: Print progress to stderr
+        progress: Optional ProgressReporter for structured progress events.
+                  If None and verbose=True, a default human-mode reporter is created.
 
     Returns:
         (result_dict, elapsed_seconds) — result_dict contains the job output
         or {"error": "..."} on failure.
     """
     config = get_provider_config(provider, tool_name)
+
+    # Create a default reporter if none provided
+    if progress is None and verbose:
+        progress = ProgressReporter(mode="human")
 
     if provider == "runpod":
         result, elapsed = _call_runpod(
@@ -190,7 +283,7 @@ def call_cloud_endpoint(
             poll_interval=poll_interval,
             queue_timeout=queue_timeout,
             progress_label=progress_label,
-            verbose=verbose,
+            progress=progress,
         )
     elif provider == "modal":
         result, elapsed = _call_modal(
@@ -200,17 +293,18 @@ def call_cloud_endpoint(
             token_secret=config["token_secret"],
             timeout=timeout,
             progress_label=progress_label,
-            verbose=verbose,
+            progress=progress,
         )
 
     else:
         raise ValueError(f"Unknown provider: {provider}")
 
     # Print cost estimate
-    if verbose and elapsed > 0 and not result.get("error"):
+    if progress and elapsed > 0 and not result.get("error"):
         cost = _estimate_cost(provider, tool_name, elapsed)
         if cost is not None:
-            _log(f"Est. cost: ${cost:.4f} ({elapsed:.0f}s on {provider})", "dim")
+            progress.event("cost", f"Est. cost: ${cost:.4f} ({elapsed:.0f}s on {provider})",
+                           level="dim")
 
     return result, elapsed
 
@@ -227,7 +321,7 @@ def _call_runpod(
     poll_interval: int = 5,
     queue_timeout: int = 300,
     progress_label: str = "Processing",
-    verbose: bool = True,
+    progress: ProgressReporter | None = None,
 ) -> tuple[dict, float]:
     """Submit + poll a RunPod serverless endpoint.
 
@@ -238,6 +332,10 @@ def _call_runpod(
         return {"error": "RUNPOD_API_KEY not set in .env"}, 0
     if not endpoint_id:
         return {"error": "RunPod endpoint ID not set. Run with --setup first."}, 0
+
+    def _emit(stage, msg, level="dim", pct=None):
+        if progress:
+            progress.event(stage, msg, pct=pct, level=level)
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -256,19 +354,24 @@ def _call_runpod(
         job_id = result.get("id")
         status = result.get("status")
 
-        if verbose and job_id:
-            _log(f"Job submitted: {job_id}", "dim")
+        if job_id:
+            _emit("submit", f"Job submitted: {job_id}")
 
         # Immediate completion (warm worker)
         if status == "COMPLETED":
-            return result.get("output", result), time.time() - start
+            elapsed = time.time() - start
+            _emit("complete", f"Completed in {elapsed:.1f}s (warm)", pct=100,
+                   level="success")
+            return result.get("output", result), elapsed
 
         if status == "FAILED":
+            _emit("error", f"Job failed: {result.get('error', 'Unknown error')}",
+                   level="error")
             return {"error": result.get("error", "Unknown error")}, time.time() - start
 
         # Poll for completion
-        if verbose:
-            _log(f"{progress_label}... (cold start may take 3-5 min on first run)", "warn")
+        _emit("queue", f"{progress_label}... (cold start may take 3-5 min on first run)",
+              level="warn")
 
         status_url = f"https://api.runpod.ai/v2/{endpoint_id}/status/{job_id}"
         queue_start = time.time()
@@ -283,32 +386,36 @@ def _call_runpod(
                 status_data = status_resp.json()
                 status = status_data.get("status")
             except Exception as e:
-                if verbose:
-                    _log(f"[{elapsed:.0f}s] Status check error: {e}", "dim")
+                _emit("error", f"[{elapsed:.0f}s] Status check error: {e}")
                 continue
 
             if status != last_status:
-                if verbose:
-                    if status == "IN_PROGRESS":
-                        _log(f"[{elapsed:.0f}s] {progress_label}...", "dim")
-                    elif status == "IN_QUEUE":
-                        _log(f"[{elapsed:.0f}s] Waiting for GPU...", "dim")
+                if status == "IN_PROGRESS":
+                    _emit("processing", f"[{elapsed:.0f}s] {progress_label}...")
+                elif status == "IN_QUEUE":
+                    _emit("queue", f"[{elapsed:.0f}s] Waiting for GPU...")
                 last_status = status
 
             if status == "COMPLETED":
-                return status_data.get("output", status_data), time.time() - start
+                elapsed = time.time() - start
+                _emit("complete", f"Completed in {elapsed:.1f}s", pct=100,
+                       level="success")
+                return status_data.get("output", status_data), elapsed
 
             if status == "FAILED":
                 error = status_data.get("error", "Unknown error")
+                _emit("error", f"Job failed: {error}", level="error")
                 return {"error": error}, time.time() - start
 
             if status in ("CANCELLED", "TIMED_OUT"):
+                _emit("error", f"Job {status}", level="error")
                 return {"error": f"Job {status}"}, time.time() - start
 
             # Cancel jobs stuck in queue too long
             if status == "IN_QUEUE" and queue_start and (time.time() - queue_start > queue_timeout):
-                if verbose:
-                    _log(f"Job stuck in queue for {queue_timeout}s — cancelling", "warn")
+                _emit("error",
+                      f"Job stuck in queue for {queue_timeout}s — cancelling",
+                      level="warn")
                 _cancel_runpod_job(endpoint_id, api_key, job_id)
                 return {"error": f"Cancelled: no GPU available after {queue_timeout}s in queue"}, time.time() - start
 
@@ -317,16 +424,18 @@ def _call_runpod(
                 queue_start = None
 
         # Overall timeout — cancel the job
-        if verbose:
-            _log("Polling timeout — cancelling job on RunPod", "warn")
+        _emit("error", "Polling timeout — cancelling job on RunPod", level="warn")
         _cancel_runpod_job(endpoint_id, api_key, job_id)
         return {"error": "polling timeout (job cancelled)"}, time.time() - start
 
     except requests.exceptions.Timeout:
+        _emit("error", "HTTP request timeout", level="error")
         return {"error": "HTTP request timeout"}, time.time() - start
     except requests.exceptions.RequestException as e:
+        _emit("error", f"Request failed: {e}", level="error")
         return {"error": f"Request failed: {e}"}, time.time() - start
     except Exception as e:
+        _emit("error", f"Unexpected error: {e}", level="error")
         return {"error": f"Unexpected error: {e}"}, time.time() - start
 
 
@@ -354,19 +463,20 @@ def _call_modal(
     token_secret: str | None,
     timeout: int = 600,
     progress_label: str = "Processing",
-    verbose: bool = True,
+    progress: ProgressReporter | None = None,
 ) -> tuple[dict, float]:
     """Call a Modal web endpoint.
 
     Modal web endpoints are synchronous — the HTTP request blocks until the
-    function completes and returns the result. No polling needed.
-
-    For endpoints that may take longer than the HTTP timeout, Modal
-    automatically handles keep-alive. We set a generous requests timeout
-    to match the function's server-side timeout.
+    function completes and returns the result. No polling needed. A heartbeat
+    thread emits periodic liveness events so bots know we're not stuck.
     """
     if not endpoint_url:
         return {"error": "Modal endpoint URL not set. Run with --setup --cloud modal first."}, 0
+
+    def _emit(stage, msg, level="dim", pct=None):
+        if progress:
+            progress.event(stage, msg, pct=pct, level=level)
 
     # Modal web endpoints can be public or authenticated.
     # If token is configured, use it; otherwise call without auth (public endpoint).
@@ -380,45 +490,56 @@ def _call_modal(
 
     start = time.time()
 
-    if verbose:
-        _log(f"{progress_label} via Modal...", "info")
+    _emit("submit", f"{progress_label} via Modal...", level="info")
 
     try:
         # Modal web endpoints are synchronous — single POST, wait for result.
-        # Set timeout slightly above the server-side function timeout to avoid
-        # the client giving up before the server does.
-        response = requests.post(
-            endpoint_url,
-            json=modal_payload,
-            headers=headers,
-            timeout=timeout + 30,
-        )
+        # Heartbeat thread emits liveness events during the blocking call.
+        heartbeat_ctx = (progress.heartbeat(
+            "waiting", f"{progress_label} via Modal... ({{elapsed:.0f}}s)"
+        ) if progress else contextmanager(lambda: (yield))())
+
+        with heartbeat_ctx:
+            response = requests.post(
+                endpoint_url,
+                json=modal_payload,
+                headers=headers,
+                timeout=timeout + 30,
+            )
 
         elapsed = time.time() - start
 
         if response.status_code == 200:
             result = response.json()
-            if verbose:
-                _log(f"Completed in {elapsed:.1f}s", "success")
+            _emit("complete", f"Completed in {elapsed:.1f}s", pct=100,
+                   level="success")
             return result, elapsed
 
         # Modal error responses
         error_body = response.text[:500]
         if response.status_code == 422:
+            _emit("error", f"Modal validation error: {error_body}", level="error")
             return {"error": f"Modal validation error: {error_body}"}, elapsed
         elif response.status_code == 408:
+            _emit("error", f"Modal function timed out after {timeout}s", level="error")
             return {"error": f"Modal function timed out after {timeout}s"}, elapsed
         elif response.status_code == 503:
+            _emit("error", "Modal endpoint scaling up or unavailable", level="error")
             return {"error": "Modal endpoint is scaling up or unavailable. Try again in a moment."}, elapsed
         else:
+            _emit("error", f"Modal HTTP {response.status_code}: {error_body}",
+                   level="error")
             return {"error": f"Modal HTTP {response.status_code}: {error_body}"}, elapsed
 
     except requests.exceptions.Timeout:
         elapsed = time.time() - start
+        _emit("error", f"Modal request timed out after {elapsed:.0f}s", level="error")
         return {"error": f"Modal request timed out after {elapsed:.0f}s"}, elapsed
     except requests.exceptions.ConnectionError as e:
         elapsed = time.time() - start
+        _emit("error", f"Modal connection failed: {e}", level="error")
         return {"error": f"Modal connection failed (is the endpoint deployed?): {e}"}, elapsed
     except Exception as e:
         elapsed = time.time() - start
+        _emit("error", f"Modal request failed: {e}", level="error")
         return {"error": f"Modal request failed: {e}"}, elapsed

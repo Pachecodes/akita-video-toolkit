@@ -167,6 +167,7 @@ def edit_image(
     open_result: bool = True,
     verbose: bool = False,
     cloud: str = "runpod",
+    progress=None,
 ) -> Optional[str]:
     """
     Edit image(s) with the given prompt.
@@ -227,6 +228,7 @@ def edit_image(
         timeout=600,
         progress_label="Editing image",
         verbose=verbose,
+        progress=progress,
     )
 
     if "error" in result:
@@ -383,6 +385,9 @@ Examples:
 
     # Utility
     parser.add_argument("--list-presets", action="store_true", help="List available presets")
+    parser.add_argument("--progress", choices=["human", "json"], default="human",
+                        help="Progress output mode: human (colored stderr, default) "
+                             "or json (JSON Lines to stderr for bots/agents)")
 
     args = parser.parse_args()
 
@@ -414,6 +419,9 @@ Examples:
         log(str(e), "error")
         sys.exit(1)
 
+    from cloud_gpu import ProgressReporter
+    reporter = ProgressReporter(mode=args.progress)
+
     print()
     log("Qwen Image Edit", "info")
     log("=" * 40, "dim")
@@ -442,6 +450,7 @@ Examples:
             open_result=not args.no_open,
             verbose=args.verbose,
             cloud=args.cloud,
+            progress=reporter,
         )
 
 

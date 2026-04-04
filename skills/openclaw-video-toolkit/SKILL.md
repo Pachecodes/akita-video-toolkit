@@ -381,6 +381,16 @@ python3 tools/chain_video.py \
 - Falls back to scene images from `--scenes-dir` if chaining fails
 - Use `--prefix` to set output filename prefix (default: `chain`)
 - ~2.5 min per scene, ~$0.20-0.25 per clip
+- Extra args (e.g. `--negative-prompt`, `--seed`) are passed through to ltx2.py
+
+**CRITICAL: Style drift in chained sequences.** LTX-2 has ~30% training data contamination (anime/Asian content). Generic prompts like "cinematic transition" will drift toward anime aesthetics within 5-10 chained scenes. To prevent this:
+
+1. **ALWAYS use `--prompts-file`** with specific per-scene prompts — never a single generic prompt for the whole chain
+2. **ALWAYS add `--negative-prompt`** to exclude unwanted styles:
+   ```
+   --negative-prompt "anime, manga, asian, cartoon, illustration, watermark, text, logo"
+   ```
+3. Each per-scene prompt should include **strong style anchors** (e.g. "Irish landscape, Celtic knotwork, oil painting style") not just subject descriptions
 
 **CRITICAL: Run with `yieldMs` for live progress reporting.** Don't break it into per-scene tool calls — OpenClaw's agent run ends between calls, causing the sequence to stall. Instead, use `exec` with `yieldMs` so you stay in the loop and can relay progress to the user:
 

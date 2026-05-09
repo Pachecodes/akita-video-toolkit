@@ -6,7 +6,7 @@
 
 [![GitHub release](https://img.shields.io/github/v/release/digitalsamba/claude-code-video-toolkit)](https://github.com/digitalsamba/claude-code-video-toolkit/releases)
 
-An AI-native video production workspace for [Claude Code](https://claude.ai/code). Skills, commands, templates, and tools that give Claude Code everything it needs to help you create professional videos — from concept to final render.
+An AI-native video production workspace for [Claude Code](https://claude.ai/code), with experimental bridges to other agent runtimes like [Codex](#using-with-codex). Skills, commands, templates, and tools that give your AI agent everything it needs to help you create professional videos — from concept to final render.
 
 ## Quick Start
 
@@ -28,7 +28,7 @@ Then in Claude Code:
 
 ## Using with Codex
 
-This toolkit is built around Claude Code assets in `.claude/` and `CLAUDE.md`, but it also ships an experimental migration script for Codex.
+This toolkit is built around Claude Code assets in `.claude/` and `CLAUDE.md`, but it also ships an experimental migration script for Codex — contributed by [@kimhoontae-gogo](https://github.com/kimhoontae-gogo) in [#16](https://github.com/digitalsamba/claude-code-video-toolkit/pull/16).
 
 ```bash
 python3 scripts/migrate_to_codex.py --force

@@ -32,7 +32,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0  # full history needed to diff across multi-commit pushes
 
       - name: Detect changed images
         id: changes
@@ -41,12 +41,16 @@ jobs:
             # Manual dispatch with specific image
             echo "images=[\"${{ github.event.inputs.image }}\"]" >> $GITHUB_OUTPUT
           else
-            # Detect changed Dockerfiles
-            CHANGED=$(git diff --name-only HEAD~1 HEAD -- 'docker/*/Dockerfile' 'docker/*/handler.py' | \
+            # Diff across the full push range, not just HEAD~1..HEAD
+            BASE="${{ github.event.before }}"
+            if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+              BASE="HEAD~1"
+            fi
+            CHANGED=$(git diff --name-only "$BASE" HEAD -- 'docker/*/Dockerfile' 'docker/*/handler.py' | \
               sed 's|docker/\([^/]*\)/.*|\1|' | sort -u | jq -R . | jq -sc .)
             if [ "$CHANGED" = "[]" ]; then
-              # Fallback: build all images
-              CHANGED=$(ls -d docker/*/ | sed 's|docker/\([^/]*\)/|\1|' | jq -R . | jq -sc .)
+              # Fallback: only build images that have a Dockerfile (modal-* dirs use Python API at deploy time)
+              CHANGED=$(for d in docker/*/; do [ -f "$d/Dockerfile" ] && basename "$d"; done | jq -R . | jq -sc .)
             fi
             echo "images=$CHANGED" >> $GITHUB_OUTPUT
           fi

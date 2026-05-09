@@ -1,8 +1,6 @@
 {
   "skip_commands": [],
-  "skip_skills": [
-    "openclaw-video-toolkit"
-  ],
+  "skip_skills": [],
   "command_name_overrides": {},
   "skill_name_overrides": {}
 }

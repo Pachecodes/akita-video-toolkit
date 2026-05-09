@@ -147,6 +147,8 @@ def parse_skill_frontmatter(skill_md: Path) -> tuple[str, str]:
 def load_skill_specs(
     repo_root: Path, mapping: dict[str, Any]
 ) -> list[SkillSpec]:
+    # Only `.claude/skills/` is scanned. Platform-specific skills under top-level
+    # `skills/` (e.g. OpenClaw) are intentionally not migrated to Codex.
     results: list[SkillSpec] = []
     for skill_md in sorted((repo_root / ".claude" / "skills").glob("*/SKILL.md")):
         source_name, description = parse_skill_frontmatter(skill_md)
@@ -284,14 +286,14 @@ def command_wrapper_content(
     repo_root: Path,
     command: CommandSpec,
     installed_skill_names: list[str],
+    toolkit_name: str,
 ) -> str:
     related = ", ".join(f"`{name}`" for name in installed_skill_names) or "(none)"
     source_rel = command.path.relative_to(repo_root).as_posix()
-    repo_name = repo_root.name
 
     return f"""---
 name: {yaml_quote(command.name)}
-description: {yaml_quote(f"Codex wrapper for Claude Code `/{command.name}` in `{repo_name}`. Use when the user wants: {command.description}")}
+description: {yaml_quote(f"Codex wrapper for Claude Code `/{command.name}` in `{toolkit_name}`. Use when the user wants: {command.description}")}
 ---
 
 # /{command.name} for Codex
@@ -327,18 +329,18 @@ def overview_skill_content(
     repo_root: Path,
     command_names: list[str],
     skill_names: list[str],
+    toolkit_name: str,
 ) -> str:
-    repo_name = repo_root.name
     commands = ", ".join(f"`/{name}`" for name in command_names)
     skills = ", ".join(f"`{name}`" for name in skill_names)
     return f"""---
 name: {yaml_quote("video-toolkit")}
-description: {yaml_quote(f"Codex entry skill for `{repo_name}`. Use when working in this repository and you need the Codex equivalents of the toolkit's Claude commands and skills.")}
+description: {yaml_quote(f"Codex entry skill for `{toolkit_name}`. Use when working in this repository and you need the Codex equivalents of the toolkit's Claude commands and skills.")}
 ---
 
 # Video Toolkit
 
-This skill helps Codex operate inside `{repo_name}` without modifying the original Claude-specific resources.
+This skill helps Codex operate inside `{toolkit_name}` without modifying the original Claude-specific resources.
 
 ## Source of Truth
 
@@ -371,6 +373,7 @@ def install_overview_skill(
     dest_root: Path,
     command_names: list[str],
     skill_names: list[str],
+    toolkit_name: str,
     force: bool,
     dry_run: bool,
 ) -> Path:
@@ -378,7 +381,7 @@ def install_overview_skill(
     ensure_clean_dir(target, force=force, dry_run=dry_run)
     write_text(
         target / "SKILL.md",
-        overview_skill_content(repo_root, command_names, skill_names),
+        overview_skill_content(repo_root, command_names, skill_names, toolkit_name),
         dry_run=dry_run,
     )
     return target
@@ -404,6 +407,7 @@ def install_command_wrappers(
     dest_root: Path,
     commands: list[CommandSpec],
     installed_skill_names: list[str],
+    toolkit_name: str,
     force: bool,
     dry_run: bool,
 ) -> list[Path]:
@@ -413,7 +417,7 @@ def install_command_wrappers(
         ensure_clean_dir(target, force=force, dry_run=dry_run)
         write_text(
             target / "SKILL.md",
-            command_wrapper_content(repo_root, command, installed_skill_names),
+            command_wrapper_content(repo_root, command, installed_skill_names, toolkit_name),
             dry_run=dry_run,
         )
         installed.append(target)
@@ -485,6 +489,7 @@ def main() -> int:
     map_file = args.map_file or (repo_root / "codex" / "migration_map.json")
     mapping = load_mapping(map_file)
     registry = load_registry(repo_root)
+    toolkit_name = registry.get("name") or repo_root.name
     commands = load_command_specs(repo_root, registry, mapping)
     skills = load_skill_specs(repo_root, mapping)
     dest_root = (Path.home() / ".codex" / "skills").expanduser().resolve()
@@ -519,6 +524,7 @@ def main() -> int:
         dest_root=dest_root,
         commands=commands,
         installed_skill_names=[skill.name for skill in skills],
+        toolkit_name=toolkit_name,
         force=args.force,
         dry_run=False,
     )
@@ -527,6 +533,7 @@ def main() -> int:
         dest_root=dest_root,
         command_names=[command.name for command in commands],
         skill_names=[skill.name for skill in skills],
+        toolkit_name=toolkit_name,
         force=args.force,
         dry_run=False,
     )

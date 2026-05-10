@@ -1,3 +1,11 @@
+# Akita Video Toolkit
+
+Akita's fork of [`digitalsamba/claude-code-video-toolkit`](https://github.com/digitalsamba/claude-code-video-toolkit). This repo is being adapted into an internal video factory that combines Remotion, HyperFrames, Higgsfield, Fal, Playwright, FFmpeg, and Episteme/ComfyUI on the local RTX 4090 box.
+
+Start with [`docs/akita-video-toolkit.md`](docs/akita-video-toolkit.md) for the Akita direction and provider architecture. The upstream README content follows below for the original toolkit reference.
+
+---
+
 # claude-code-video-toolkit
 
 <p align="center">

@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## Akita fork context
+
+This fork is `akita-video-toolkit`, Akita's internal video factory. Preserve upstream compatibility where practical, but prefer Akita-specific provider wrappers, project folders, and docs under `docs/akita-video-toolkit.md`. Do not commit provider secrets; use `.env`, shell env, Higgsfield auth, or local config outside Git.
+
 This is the [claude-code-video-toolkit](https://github.com/digitalsamba/claude-code-video-toolkit) — an AI-native video production workspace. It's built around [Claude Code](https://claude.ai/code) and `CLAUDE.md`, with experimental bridges to other agent runtimes.
 
 For full toolkit guidance — workflow, conventions, timing rules, design patterns, tool catalog — read **[CLAUDE.md](./CLAUDE.md)**. Everything in there applies equally to a Codex (or other-agent) session.

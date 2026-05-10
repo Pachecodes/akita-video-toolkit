@@ -1,0 +1,35 @@
+{
+  "name": "akita-video-toolkit",
+  "default_output_root": "projects",
+  "brands_root": "brands",
+  "recipes_root": "recipes",
+  "providers": {
+    "fal": {
+      "enabled": true,
+      "api_key_env": "FAL_KEY",
+      "base_url": "https://fal.run"
+    },
+    "higgsfield": {
+      "enabled": true,
+      "cli": "higgsfield"
+    },
+    "episteme": {
+      "enabled": true,
+      "ollama_base_url": "http://192.168.68.62:11434",
+      "comfyui_base_url": "http://192.168.68.62:8188"
+    },
+    "hyperframes": {
+      "enabled": true,
+      "cli": "hyperframes"
+    },
+    "remotion": {
+      "enabled": true,
+      "node_path_hint": "/opt/homebrew/opt/node@22/bin"
+    }
+  },
+  "formats": {
+    "horizontal": { "aspect_ratio": "16:9", "width": 1920, "height": 1080 },
+    "vertical": { "aspect_ratio": "9:16", "width": 1080, "height": 1920 },
+    "square": { "aspect_ratio": "1:1", "width": 1080, "height": 1080 }
+  }
+}

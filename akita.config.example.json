@@ -16,7 +16,7 @@
     "episteme": {
       "enabled": true,
       "ollama_base_url": "http://192.168.68.62:11434",
-      "comfyui_base_url": "http://192.168.68.62:8188"
+      "comfyui_base_url": "http://192.168.68.62:1122"
     },
     "hyperframes": {
       "enabled": true,

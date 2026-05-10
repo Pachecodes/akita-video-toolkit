@@ -62,7 +62,7 @@ No reusable creative work should live only in `/tmp`.
 
 - Local config file: `akita.config.json` (copy from `akita.config.example.json`).
 - Secrets stay in `.env`, shell env, or provider-native auth stores. Never commit API keys.
-- Episteme defaults to LAN host `192.168.68.62` with Ollama on `:11434` and ComfyUI expected on `:8188` when enabled.
+- Episteme defaults to LAN host `192.168.68.62` with Ollama on `:11434` and ComfyUI expected on `:1122` when enabled.
 
 ## First Internal Templates
 

@@ -7,7 +7,7 @@ from typing import Any
 from .common import ProviderResult
 
 
-def health(base_url: str = "http://192.168.68.62:8188") -> ProviderResult:
+def health(base_url: str = "http://192.168.68.62:1122") -> ProviderResult:
     url = base_url.rstrip("/") + "/system_stats"
     try:
         with urllib.request.urlopen(url, timeout=5) as response:
@@ -17,7 +17,7 @@ def health(base_url: str = "http://192.168.68.62:8188") -> ProviderResult:
         return ProviderResult("comfyui", "health", "error", metadata={"base_url": base_url, "error": str(exc)})
 
 
-def queue_prompt(workflow: dict[str, Any], base_url: str = "http://192.168.68.62:8188", *, dry_run: bool = False) -> ProviderResult:
+def queue_prompt(workflow: dict[str, Any], base_url: str = "http://192.168.68.62:1122", *, dry_run: bool = False) -> ProviderResult:
     if dry_run:
         return ProviderResult("comfyui", "workflow", "dry_run", metadata={"base_url": base_url, "workflow_node_count": len(workflow)})
 
